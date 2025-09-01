@@ -92,6 +92,11 @@ class RSAToolApp(tk.Tk):
         self.last_public_pem = None
         self.last_private_pem = None
 
+    def _on_lang_change(self, event):
+        sel = self.lang_box.get()
+        self.lang = "zh" if sel == "中文" else "en"
+        self._refresh_texts()
+
     def _build_ui(self):
         top_frame = ttk.Frame(self)
         top_frame.pack(fill="x", padx=8, pady=6)
@@ -120,9 +125,13 @@ class RSAToolApp(tk.Tk):
     def _build_tab_generate(self):
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text=t("tab_generate", self.lang))
+        frame.grid_rowconfigure(1, weight=1)  # 让文本区域可以扩展
+        frame.grid_columnconfigure(0, weight=1)
+        frame.grid_columnconfigure(1, weight=1)
 
+        # 顶部控件
         top = ttk.Frame(frame)
-        top.pack(fill="x", padx=8, pady=6)
+        top.grid(row=0, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
 
         ttk.Label(top, text=t("keysize_label", self.lang)).pack(side="left")
         self.keysize_box = ttk.Combobox(top, values=["512", "1024", "2048", "4096"], width=8, state="readonly")
@@ -139,22 +148,25 @@ class RSAToolApp(tk.Tk):
         self.copy_priv_btn.pack(side="right")
 
         # Keys 显示区
-        mid = ttk.Frame(frame)
-        mid.pack(fill="both", expand=True, padx=8, pady=6)
-
         # 公钥
-        left = ttk.Frame(mid)
-        left.pack(side="left", fill="both", expand=True, padx=(0,4))
-        ttk.Label(left, text=t("pubkey_label", self.lang)).pack(anchor="w")
-        self.pub_text = ScrolledText(left, height=12)
-        self.pub_text.pack(fill="both", expand=True)
+        left = ttk.Frame(frame)
+        left.grid(row=1, column=0, sticky="nsew", padx=(8,4), pady=6)
+        left.grid_rowconfigure(1, weight=1)  # 让文本区域可以扩展
+        left.grid_columnconfigure(0, weight=1)
+        
+        ttk.Label(left, text=t("pubkey_label", self.lang)).grid(row=0, column=0, sticky="w")
+        self.pub_text = ScrolledText(left, font=("Consolas", 10))
+        self.pub_text.grid(row=1, column=0, sticky="nsew")
 
         # 私钥
-        right = ttk.Frame(mid)
-        right.pack(side="left", fill="both", expand=True, padx=(4,0))
-        ttk.Label(right, text=t("privkey_label", self.lang)).pack(anchor="w")
-        self.priv_text = ScrolledText(right, height=12)
-        self.priv_text.pack(fill="both", expand=True)
+        right = ttk.Frame(frame)
+        right.grid(row=1, column=1, sticky="nsew", padx=(4,8), pady=6)
+        right.grid_rowconfigure(1, weight=1)  # 让文本区域可以扩展
+        right.grid_columnconfigure(0, weight=1)
+        
+        ttk.Label(right, text=t("privkey_label", self.lang)).grid(row=0, column=0, sticky="w")
+        self.priv_text = ScrolledText(right, font=("Consolas", 10))
+        self.priv_text.grid(row=1, column=0, sticky="nsew")
 
     # ---------------------------
     #  页：公钥加密
@@ -162,28 +174,54 @@ class RSAToolApp(tk.Tk):
     def _build_tab_encrypt(self):
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text=t("tab_encrypt", self.lang))
+        frame.grid_rowconfigure(0, weight=1)  # 公钥区域
+        frame.grid_rowconfigure(1, weight=0)  # 按钮行1（固定高度）
+        frame.grid_rowconfigure(2, weight=1)  # 明文区域
+        frame.grid_rowconfigure(3, weight=0)  # 按钮行2（固定高度）
+        frame.grid_rowconfigure(4, weight=1)  # 密文输出区域
+        frame.grid_columnconfigure(0, weight=1)
 
-        upper = ttk.Frame(frame)
-        upper.pack(fill="both", expand=False, padx=8, pady=(8,4))
+        # 公钥区域
+        pub_frame = ttk.Frame(frame)
+        pub_frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8,4))
+        pub_frame.grid_rowconfigure(1, weight=1)
+        pub_frame.grid_columnconfigure(0, weight=1)
 
-        ttk.Label(upper, text=t("pubkey_label", self.lang)).pack(anchor="w")
-        self.enc_pub_text = ScrolledText(upper, height=8)
-        self.enc_pub_text.pack(fill="x", expand=True)
+        ttk.Label(pub_frame, text=t("pubkey_label", self.lang)).grid(row=0, column=0, sticky="w")
+        self.enc_pub_text = ScrolledText(pub_frame)
+        self.enc_pub_text.grid(row=1, column=0, sticky="nsew")
 
-        ttk.Label(upper, text=t("plaintext_label", self.lang)).pack(anchor="w", pady=(6,0))
-        self.plain_text = ScrolledText(upper, height=8)
-        self.plain_text.pack(fill="both", expand=True)
+        # 第一个按钮行
+        btn_row1 = ttk.Frame(frame)
+        btn_row1.grid(row=1, column=0, sticky="ew", padx=8, pady=6)
 
-        btn_row = ttk.Frame(frame)
-        btn_row.pack(fill="x", padx=8, pady=6)
-        self.enc_btn = ttk.Button(btn_row, text=t("encrypt_btn", self.lang), command=self._encrypt_action)
+        # 明文区域
+        plain_frame = ttk.Frame(frame)
+        plain_frame.grid(row=2, column=0, sticky="nsew", padx=8, pady=4)
+        plain_frame.grid_rowconfigure(1, weight=1)
+        plain_frame.grid_columnconfigure(0, weight=1)
+
+        ttk.Label(plain_frame, text=t("plaintext_label", self.lang)).grid(row=0, column=0, sticky="w")
+        self.plain_text = ScrolledText(plain_frame)
+        self.plain_text.grid(row=1, column=0, sticky="nsew")
+
+        # 第二个按钮行
+        btn_row2 = ttk.Frame(frame)
+        btn_row2.grid(row=3, column=0, sticky="ew", padx=8, pady=6)
+        self.enc_btn = ttk.Button(btn_row2, text=t("encrypt_btn", self.lang), command=self._encrypt_action)
         self.enc_btn.pack(side="left")
-        self.enc_copy_out_btn = ttk.Button(btn_row, text=t("copy_out", self.lang), command=lambda: self._copy_text(self.enc_out_text), state="disabled")
+        self.enc_copy_out_btn = ttk.Button(btn_row2, text=t("copy_out", self.lang), command=lambda: self._copy_text(self.enc_out_text), state="disabled")
         self.enc_copy_out_btn.pack(side="right")
 
-        ttk.Label(frame, text=t("ciphertext_label", self.lang)).pack(anchor="w", padx=8)
-        self.enc_out_text = ScrolledText(frame, height=8)
-        self.enc_out_text.pack(fill="both", expand=True, padx=8, pady=(0,8))
+        # 密文输出区域
+        out_frame = ttk.Frame(frame)
+        out_frame.grid(row=4, column=0, sticky="nsew", padx=8, pady=(4,8))
+        out_frame.grid_rowconfigure(1, weight=1)
+        out_frame.grid_columnconfigure(0, weight=1)
+
+        ttk.Label(out_frame, text=t("ciphertext_label", self.lang)).grid(row=0, column=0, sticky="w")
+        self.enc_out_text = ScrolledText(out_frame)
+        self.enc_out_text.grid(row=1, column=0, sticky="nsew")
 
     # ---------------------------
     #  页：私钥解密
@@ -191,34 +229,58 @@ class RSAToolApp(tk.Tk):
     def _build_tab_decrypt(self):
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text=t("tab_decrypt", self.lang))
+        frame.grid_rowconfigure(0, weight=1)  # 私钥区域
+        frame.grid_rowconfigure(1, weight=0)  # 按钮行1（固定高度）
+        frame.grid_rowconfigure(2, weight=1)  # 密文输入区域
+        frame.grid_rowconfigure(3, weight=0)  # 按钮行2（固定高度）
+        frame.grid_rowconfigure(4, weight=1)  # 明文输出区域
+        frame.grid_columnconfigure(0, weight=1)
 
-        ttk.Label(frame, text=t("privkey_label", self.lang)).pack(anchor="w", padx=8, pady=(8,0))
-        self.dec_priv_text = ScrolledText(frame, height=8)
-        self.dec_priv_text.pack(fill="x", expand=True, padx=8)
+        # 私钥区域
+        priv_frame = ttk.Frame(frame)
+        priv_frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8,4))
+        priv_frame.grid_rowconfigure(1, weight=1)
+        priv_frame.grid_columnconfigure(0, weight=1)
 
-        ttk.Label(frame, text=t("ciphertext_label", self.lang)).pack(anchor="w", padx=8, pady=(6,0))
-        self.cipher_in_text = ScrolledText(frame, height=8)
-        self.cipher_in_text.pack(fill="both", expand=True, padx=8)
+        ttk.Label(priv_frame, text=t("privkey_label", self.lang)).grid(row=0, column=0, sticky="w")
+        self.dec_priv_text = ScrolledText(priv_frame)
+        self.dec_priv_text.grid(row=1, column=0, sticky="nsew")
 
-        btn_row = ttk.Frame(frame)
-        btn_row.pack(fill="x", padx=8, pady=6)
-        self.dec_btn = ttk.Button(btn_row, text=t("decrypt_btn", self.lang), command=self._decrypt_action)
+        # 第一个按钮行
+        btn_row1 = ttk.Frame(frame)
+        btn_row1.grid(row=1, column=0, sticky="ew", padx=8, pady=6)
+
+        # 密文输入区域
+        cipher_frame = ttk.Frame(frame)
+        cipher_frame.grid(row=2, column=0, sticky="nsew", padx=8, pady=4)
+        cipher_frame.grid_rowconfigure(1, weight=1)
+        cipher_frame.grid_columnconfigure(0, weight=1)
+
+        ttk.Label(cipher_frame, text=t("ciphertext_label", self.lang)).grid(row=0, column=0, sticky="w")
+        self.cipher_in_text = ScrolledText(cipher_frame)
+        self.cipher_in_text.grid(row=1, column=0, sticky="nsew")
+
+        # 第二个按钮行
+        btn_row2 = ttk.Frame(frame)
+        btn_row2.grid(row=3, column=0, sticky="ew", padx=8, pady=6)
+        self.dec_btn = ttk.Button(btn_row2, text=t("decrypt_btn", self.lang), command=self._decrypt_action)
         self.dec_btn.pack(side="left")
-        self.dec_copy_out_btn = ttk.Button(btn_row, text=t("copy_out", self.lang), command=lambda: self._copy_text(self.dec_out_text), state="disabled")
+        self.dec_copy_out_btn = ttk.Button(btn_row2, text=t("copy_out", self.lang), command=lambda: self._copy_text(self.dec_out_text), state="disabled")
         self.dec_copy_out_btn.pack(side="right")
 
-        ttk.Label(frame, text=t("plaintext_label", self.lang)).pack(anchor="w", padx=8)
-        self.dec_out_text = ScrolledText(frame, height=8)
-        self.dec_out_text.pack(fill="both", expand=True, padx=8, pady=(0,8))
+        # 明文输出区域
+        out_frame = ttk.Frame(frame)
+        out_frame.grid(row=4, column=0, sticky="nsew", padx=8, pady=(4,8))
+        out_frame.grid_rowconfigure(1, weight=1)
+        out_frame.grid_columnconfigure(0, weight=1)
+
+        ttk.Label(out_frame, text=t("plaintext_label", self.lang)).grid(row=0, column=0, sticky="w")
+        self.dec_out_text = ScrolledText(out_frame)
+        self.dec_out_text.grid(row=1, column=0, sticky="nsew")
 
     # ---------------------------
     #  语言切换
     # ---------------------------
-    def _on_lang_change(self, _ev=None):
-        sel = self.lang_box.get()
-        self.lang = "zh" if sel == "中文" else "en"
-        self._refresh_texts()
-
     def _refresh_texts(self):
         self.title(t("title", self.lang))
         # notebook tab texts
