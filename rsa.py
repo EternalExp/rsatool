@@ -1,10 +1,8 @@
-# rsa_tool.py
 import tkinter as tk
 from tkinter import ttk, messagebox
 from tkinter.scrolledtext import ScrolledText
 import threading
 import base64
-
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Hash import SHA1
@@ -15,6 +13,7 @@ from Crypto.Hash import SHA1
 TEXTS = {
     "title": {"zh": "RSA 本地工具", "en": "RSA Local Tool"},
     "lang_label": {"zh": "语言：", "en": "Language:"},
+    "clear_btn": {"zh": "清除", "en": "Clear"},
     "tab_generate": {"zh": "生成密钥", "en": "Generate Keys"},
     "tab_encrypt": {"zh": "公钥加密", "en": "Encrypt (Public Key)"},
     "tab_decrypt": {"zh": "私钥解密", "en": "Decrypt (Private Key)"},
@@ -84,37 +83,92 @@ class RSAToolApp(tk.Tk):
         self.title(t("title", self.lang))
         self.geometry("920x640")
         self.resizable(True, True)
-
+        # --- 新增：窗口居中 ---
+        self._center_window()
+        # ---------------------
         self._build_ui()
         self._set_status(t("status_ready", self.lang))
-
         # 最新生成的密钥（内存中）
         self.last_public_pem = None
         self.last_private_pem = None
+
+    # --- 新增：窗口居中方法 ---
+    def _center_window(self):
+        """将窗口居中于屏幕"""
+        # 强制Tkinter更新窗口的几何信息（包括可能由布局管理器调整后的大小）
+        self.update_idletasks()
+
+        # 获取窗口的宽度和高度
+        window_width = self.winfo_width()
+        window_height = self.winfo_height()
+
+        # 获取屏幕的宽度和高度
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+
+        # 计算居中位置的x和y坐标
+        x = (screen_width // 2) - (window_width // 2)
+        y = (screen_height // 2) - (window_height // 2)
+
+        # 应用新的几何位置
+        # 使用 f-string 格式化 geometry 字符串
+        self.geometry(f"{window_width}x{window_height}+{x}+{y}")
+    # ------------------------
 
     def _on_lang_change(self, event):
         sel = self.lang_box.get()
         self.lang = "zh" if sel == "中文" else "en"
         self._refresh_texts()
 
+    # --- 新增：清除所有输入输出 ---
+    def _clear_all(self):
+        """清除所有文本框的内容"""
+        # 生成密钥页
+        self.pub_text.delete("1.0", "end")
+        self.priv_text.delete("1.0", "end")
+        self.copy_pub_btn.config(state="disabled")
+        self.copy_priv_btn.config(state="disabled")
+        
+        # 公钥加密页
+        # --- 修复 Bug：清除公钥输入框 ---
+        self.enc_pub_text.delete("1.0", "end")
+        # ---------------------------------
+        self.plain_text.delete("1.0", "end")
+        self.enc_out_text.delete("1.0", "end")
+        self.enc_copy_out_btn.config(state="disabled")
+        
+        # 私钥解密页
+        # --- 修复 Bug：清除私钥输入框 ---
+        self.dec_priv_text.delete("1.0", "end")
+        # ---------------------------------
+        self.cipher_in_text.delete("1.0", "end")
+        self.dec_out_text.delete("1.0", "end")
+        self.dec_copy_out_btn.config(state="disabled")
+        
+        # 重置状态
+        self._set_status(t("status_ready", self.lang))
+    # -----------------------------
+
     def _build_ui(self):
         top_frame = ttk.Frame(self)
         top_frame.pack(fill="x", padx=8, pady=6)
-
         ttk.Label(top_frame, text=t("lang_label", self.lang)).pack(side="left")
         self.lang_box = ttk.Combobox(top_frame, values=["中文", "English"], width=8, state="readonly")
         self.lang_box.current(0 if self.lang == "zh" else 1)
         self.lang_box.bind("<<ComboboxSelected>>", self._on_lang_change)
         self.lang_box.pack(side="left", padx=(2, 10))
-
         self.status_var = tk.StringVar(value="")
         self.status_label = ttk.Label(top_frame, textvariable=self.status_var)
         self.status_label.pack(side="right")
-
+        
+        # --- 新增：清除按钮 ---
+        self.clear_btn = ttk.Button(top_frame, text=t("clear_btn", self.lang), command=self._clear_all)
+        self.clear_btn.pack(side="right", padx=(0, 10))
+        # ---------------------
+        
         # Notebook（3 页）
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True, padx=8, pady=6)
-
         self._build_tab_generate()
         self._build_tab_encrypt()
         self._build_tab_decrypt()
@@ -128,42 +182,34 @@ class RSAToolApp(tk.Tk):
         frame.grid_rowconfigure(1, weight=1)  # 让文本区域可以扩展
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_columnconfigure(1, weight=1)
-
         # 顶部控件
         top = ttk.Frame(frame)
         top.grid(row=0, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
-
         ttk.Label(top, text=t("keysize_label", self.lang)).pack(side="left")
         self.keysize_box = ttk.Combobox(top, values=["512", "1024", "2048", "4096"], width=8, state="readonly")
         self.keysize_box.current(1)  # 默认 1024
         self.keysize_box.pack(side="left", padx=(2,10))
-
         self.gen_btn = ttk.Button(top, text=t("generate_btn", self.lang), command=self._generate_keys_thread)
         self.gen_btn.pack(side="left")
-
-        # copy 按钮
-        self.copy_pub_btn = ttk.Button(top, text=t("copy_pub", self.lang), command=self._copy_public, state="disabled")
-        self.copy_pub_btn.pack(side="right", padx=(6,0))
+        # copy 按钮 (对换位置)
         self.copy_priv_btn = ttk.Button(top, text=t("copy_priv", self.lang), command=self._copy_private, state="disabled")
-        self.copy_priv_btn.pack(side="right")
-
+        self.copy_priv_btn.pack(side="right", padx=(6,0))
+        self.copy_pub_btn = ttk.Button(top, text=t("copy_pub", self.lang), command=self._copy_public, state="disabled")
+        self.copy_pub_btn.pack(side="right")
         # Keys 显示区
         # 公钥
         left = ttk.Frame(frame)
         left.grid(row=1, column=0, sticky="nsew", padx=(8,4), pady=6)
         left.grid_rowconfigure(1, weight=1)  # 让文本区域可以扩展
         left.grid_columnconfigure(0, weight=1)
-        
         ttk.Label(left, text=t("pubkey_label", self.lang)).grid(row=0, column=0, sticky="w")
         self.pub_text = ScrolledText(left, font=("Consolas", 10))
         self.pub_text.grid(row=1, column=0, sticky="nsew")
-
         # 私钥
         right = ttk.Frame(frame)
         right.grid(row=1, column=1, sticky="nsew", padx=(4,8), pady=6)
         right.grid_rowconfigure(1, weight=1)  # 让文本区域可以扩展
         right.grid_columnconfigure(0, weight=1)
-        
         ttk.Label(right, text=t("privkey_label", self.lang)).grid(row=0, column=0, sticky="w")
         self.priv_text = ScrolledText(right, font=("Consolas", 10))
         self.priv_text.grid(row=1, column=0, sticky="nsew")
@@ -180,31 +226,25 @@ class RSAToolApp(tk.Tk):
         frame.grid_rowconfigure(3, weight=0)  # 按钮行2（固定高度）
         frame.grid_rowconfigure(4, weight=1)  # 密文输出区域
         frame.grid_columnconfigure(0, weight=1)
-
         # 公钥区域
         pub_frame = ttk.Frame(frame)
         pub_frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8,4))
         pub_frame.grid_rowconfigure(1, weight=1)
         pub_frame.grid_columnconfigure(0, weight=1)
-
         ttk.Label(pub_frame, text=t("pubkey_label", self.lang)).grid(row=0, column=0, sticky="w")
         self.enc_pub_text = ScrolledText(pub_frame)
         self.enc_pub_text.grid(row=1, column=0, sticky="nsew")
-
         # 第一个按钮行
         btn_row1 = ttk.Frame(frame)
         btn_row1.grid(row=1, column=0, sticky="ew", padx=8, pady=6)
-
         # 明文区域
         plain_frame = ttk.Frame(frame)
         plain_frame.grid(row=2, column=0, sticky="nsew", padx=8, pady=4)
         plain_frame.grid_rowconfigure(1, weight=1)
         plain_frame.grid_columnconfigure(0, weight=1)
-
         ttk.Label(plain_frame, text=t("plaintext_label", self.lang)).grid(row=0, column=0, sticky="w")
         self.plain_text = ScrolledText(plain_frame)
         self.plain_text.grid(row=1, column=0, sticky="nsew")
-
         # 第二个按钮行
         btn_row2 = ttk.Frame(frame)
         btn_row2.grid(row=3, column=0, sticky="ew", padx=8, pady=6)
@@ -212,13 +252,11 @@ class RSAToolApp(tk.Tk):
         self.enc_btn.pack(side="left")
         self.enc_copy_out_btn = ttk.Button(btn_row2, text=t("copy_out", self.lang), command=lambda: self._copy_text(self.enc_out_text), state="disabled")
         self.enc_copy_out_btn.pack(side="right")
-
         # 密文输出区域
         out_frame = ttk.Frame(frame)
         out_frame.grid(row=4, column=0, sticky="nsew", padx=8, pady=(4,8))
         out_frame.grid_rowconfigure(1, weight=1)
         out_frame.grid_columnconfigure(0, weight=1)
-
         ttk.Label(out_frame, text=t("ciphertext_label", self.lang)).grid(row=0, column=0, sticky="w")
         self.enc_out_text = ScrolledText(out_frame)
         self.enc_out_text.grid(row=1, column=0, sticky="nsew")
@@ -235,31 +273,25 @@ class RSAToolApp(tk.Tk):
         frame.grid_rowconfigure(3, weight=0)  # 按钮行2（固定高度）
         frame.grid_rowconfigure(4, weight=1)  # 明文输出区域
         frame.grid_columnconfigure(0, weight=1)
-
         # 私钥区域
         priv_frame = ttk.Frame(frame)
         priv_frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8,4))
         priv_frame.grid_rowconfigure(1, weight=1)
         priv_frame.grid_columnconfigure(0, weight=1)
-
         ttk.Label(priv_frame, text=t("privkey_label", self.lang)).grid(row=0, column=0, sticky="w")
         self.dec_priv_text = ScrolledText(priv_frame)
         self.dec_priv_text.grid(row=1, column=0, sticky="nsew")
-
         # 第一个按钮行
         btn_row1 = ttk.Frame(frame)
         btn_row1.grid(row=1, column=0, sticky="ew", padx=8, pady=6)
-
         # 密文输入区域
         cipher_frame = ttk.Frame(frame)
         cipher_frame.grid(row=2, column=0, sticky="nsew", padx=8, pady=4)
         cipher_frame.grid_rowconfigure(1, weight=1)
         cipher_frame.grid_columnconfigure(0, weight=1)
-
         ttk.Label(cipher_frame, text=t("ciphertext_label", self.lang)).grid(row=0, column=0, sticky="w")
         self.cipher_in_text = ScrolledText(cipher_frame)
         self.cipher_in_text.grid(row=1, column=0, sticky="nsew")
-
         # 第二个按钮行
         btn_row2 = ttk.Frame(frame)
         btn_row2.grid(row=3, column=0, sticky="ew", padx=8, pady=6)
@@ -267,13 +299,11 @@ class RSAToolApp(tk.Tk):
         self.dec_btn.pack(side="left")
         self.dec_copy_out_btn = ttk.Button(btn_row2, text=t("copy_out", self.lang), command=lambda: self._copy_text(self.dec_out_text), state="disabled")
         self.dec_copy_out_btn.pack(side="right")
-
         # 明文输出区域
         out_frame = ttk.Frame(frame)
         out_frame.grid(row=4, column=0, sticky="nsew", padx=8, pady=(4,8))
         out_frame.grid_rowconfigure(1, weight=1)
         out_frame.grid_columnconfigure(0, weight=1)
-
         ttk.Label(out_frame, text=t("plaintext_label", self.lang)).grid(row=0, column=0, sticky="w")
         self.dec_out_text = ScrolledText(out_frame)
         self.dec_out_text.grid(row=1, column=0, sticky="nsew")
@@ -297,11 +327,14 @@ class RSAToolApp(tk.Tk):
         self.dec_btn.config(text=t("decrypt_btn", self.lang))
         self.enc_copy_out_btn.config(text=t("copy_out", self.lang))
         self.dec_copy_out_btn.config(text=t("copy_out", self.lang))
+        # --- 新增：刷新清除按钮文本 ---
+        self.clear_btn.config(text=t("clear_btn", self.lang))
+        # ----------------------------
         # status label text stays as-is or reset
         self._set_status(t("status_ready", self.lang))
 
     # ---------------------------
-    #  状态、复制
+    #  状态、复制 (修改后的无提示版本)
     # ---------------------------
     def _set_status(self, s):
         self.status_var.set(s)
@@ -312,20 +345,21 @@ class RSAToolApp(tk.Tk):
             return
         self.clipboard_clear()
         self.clipboard_append(txt)
-        # small feedback
-        messagebox.showinfo(t("title", self.lang), "Copied." if self.lang == "en" else "已复制。")
+        # 不再显示提示框
 
     def _copy_public(self):
         txt = self.pub_text.get("1.0", "end-1c").strip()
         if txt:
-            self.clipboard_clear(); self.clipboard_append(txt)
-            messagebox.showinfo(t("title", self.lang), "Copied public key." if self.lang=="en" else "已复制公钥。")
+            self.clipboard_clear()
+            self.clipboard_append(txt)
+            # 不再显示提示框
 
     def _copy_private(self):
         txt = self.priv_text.get("1.0", "end-1c").strip()
         if txt:
-            self.clipboard_clear(); self.clipboard_append(txt)
-            messagebox.showinfo(t("title", self.lang), "Copied private key." if self.lang=="en" else "已复制私钥。")
+            self.clipboard_clear()
+            self.clipboard_append(txt)
+            # 不再显示提示框
 
     # ---------------------------
     #  生成密钥（线程）
@@ -357,6 +391,11 @@ class RSAToolApp(tk.Tk):
         self.copy_pub_btn.config(state="normal"); self.copy_priv_btn.config(state="normal")
         self.gen_btn.config(state="normal")
         self._set_status(t("ok_generated", self.lang))
+        
+        # --- 新增：自动填充私钥到解密页 ---
+        self.dec_priv_text.delete("1.0", "end")
+        self.dec_priv_text.insert("1.0", priv_pem)
+        # ----------------------------------
 
     def _on_generate_error(self, errmsg):
         messagebox.showerror(t("title", self.lang), errmsg)
@@ -412,7 +451,6 @@ class RSAToolApp(tk.Tk):
         except Exception as e:
             messagebox.showerror(t("title", self.lang), t("err_decrypt", self.lang) + "\n" + str(e))
             self._set_status(t("status_ready", self.lang))
-
 
 # ---------------------------
 #  程序入口
